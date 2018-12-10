@@ -1,0 +1,46 @@
+MODULE main
+
+VAR
+    andares : {a0,a1,a2,ERROR};
+    movimento : {sub, des, stop,ERROR};
+    tempo : -1 .. 2;
+
+ASSIGN
+    init(andares) := a0;
+    init(movimento) := stop;
+    init(tempo) := 2;
+
+    next(andares) := case
+        (andares = a0) & (movimento = sub) & (tempo = 0) : {a1};
+        (andares = a1) & (movimento = sub) & (tempo = 0) : {a2};
+        (andares = a1) & (movimento = des) & (tempo = 0) : {a0};
+        (andares = a2) & (movimento = des) & (tempo = 0) : {a1};
+        (movimento = sub | movimento = des) : andares;
+        (andares = a2) & (movimento = stop) : {a2};
+        (andares = a1) & (movimento = stop) : {a1};
+        (andares = a0) & (movimento = stop) : {a0};
+        TRUE:ERROR;
+    esac;
+
+    next(movimento) := case
+        (andares = a0) & (movimento = stop) : {stop,sub};
+        (andares = a1) & (movimento = stop) : {stop,sub,des};
+        (andares = a2) & (movimento = stop) : {stop,des};
+        (tempo = 0) : stop;
+        (movimento != stop) : movimento;
+        TRUE:ERROR;
+    esac;
+
+    next(tempo) := case
+        (tempo = 0) : 2;
+        (movimento = sub | movimento = des) :  max(tempo - 1,0);
+        TRUE : 2;
+    esac;
+
+-- reset
+-- read_model -i segundo.smv
+-- flatten_hierarchy 
+-- encode_variables
+-- build_model
+
+    

@@ -1,62 +1,71 @@
 MODULE main
 
 VAR
-    andares : {a0,a1,a2,ERROR};
-    movimento : {sub, des, stop,ERROR};
-    tempoTrans : 0 .. 2;
-    porta :{abrindo,aberta,fechando,fechada};
+    andares : {andar0, andar1, andar2, ERROR};
+    movimento : {subindo, descendo, parado, ERROR};
+    tempo : 0 .. 6;
+    porta : {abrindo, aberta, fechando, fechada, ERROR};
 
 
 ASSIGN
-    init(andares) := a0;
-    init(movimento) := stop;
-    init(tempoTrans) := 2;
+    init(andares) := andar0;
+    init(movimento) := parado;
+    init(tempo) := 0;
     init(porta) := fechada;
 
 
     next(andares) := case
-        (andares = a0) & (movimento = sub) & (tempoTrans = 0) : {a1};
-        (andares = a1) & (movimento = sub) & (tempoTrans = 0) : {a2};
-        (andares = a1) & (movimento = des) & (tempoTrans = 0) : {a0};
-        (andares = a2) & (movimento = des) & (tempoTrans = 0) : {a1};
-        (movimento = sub | movimento = des | movimento = stop) : andares;
-        TRUE:ERROR;
+        (tempo > 0) : andares;
+        (andares = andar0) & (movimento = subindo) : {andar1};
+        (andares = andar1) & (movimento = subindo) : {andar2};
+        (andares = andar1) & (movimento = descendo) : {andar0};
+        (andares = andar2) & (movimento = descendo) : {andar1};
+        (movimento = subindo | movimento = descendo | movimento = parado ) : andares;
+        TRUE: ERROR;
     esac;
 
     next(movimento) := case
-        (next(porta) != fechada | porta != fechada) : movimento;
-        (andares = a0) & (movimento = stop) : {stop,sub};
-        (andares = a1) & (movimento = stop) : {stop,sub,des};
-        (andares = a2) & (movimento = stop) : {stop,des};
-        (tempoTrans = 0) : stop;
-        (movimento != stop) : movimento;
-        TRUE:ERROR;
+        (tempo > 0) : movimento;
+        (porta != fechada | next(porta) != fechada) : parado;
+        (andares = andar0) & (movimento = parado ) : {parado ,subindo};
+        (andares = andar1) & (movimento = parado ) : {parado ,subindo,descendo};
+        (andares = andar2) & (movimento = parado ) : {parado ,descendo};
+        (tempo = 0) : parado ;
+        (movimento != parado ) : movimento;
+        TRUE: ERROR;
     esac;
 
-    next(tempoTrans) := case
-        (tempoTrans = 0) : 2;
-        (movimento = sub | movimento = des) :  max(tempoTrans - 1,0);
-        TRUE : 2;
+    next(tempo) := case
+        (tempo > 0) : tempo - 1;
+        (porta = fechada & next(porta) = abrindo) : 2;
+        (porta = abrindo & next(porta) = aberta) : 6;
+        (porta = aberta & next(porta) = fechando) : 2;
+        (movimento = parado & (next(movimento) = subindo | next(movimento) = descendo)) :  2;
+        TRUE : 0;
     esac;
-
-
 
     next(porta) := case
-        movimento != stop : porta;
+        (tempo > 0) : porta; 
+        (movimento != parado )  : fechada;
         porta = fechada :{abrindo,fechada};
         porta = abrindo : aberta;
         porta = aberta : fechando;
         porta = fechando : fechada;
+        TRUE: ERROR;
     esac;
 
-
-
+SPEC AG(movimento != ERROR & porta != ERROR & andares != ERROR) -- verficação que nunca vai acontecer uma situação de erro
+SPEC AG(tempo >= 0 & tempo <= 6) -- verficação que o tempo irá exceder os limites
+SPEC AG((movimento = subindo | movimento = descendo) -> porta = fechada) -- verficação que o o elevador nunca estará subindo ou descendo com a porta aberta
+SPEC AG((porta = abrindo | porta = fechando | porta = aberta) -> movimento = parado) -- verficação do se e somente se para a situação anterior
+SPEC AG !(andares = andar2 & movimento = subindo) -- verficação que ele nunca vai estar subindo quando estiver no andar 2
+SPEC AG !(andares = andar0 & movimento = descendo) -- verficação que ele nunca vai estar descendo quando estiver no andar 0
     
---./NuSMV -int
---reset
---read_model -i elevador.smv
---flatten_hierarchy 
---encode_variables
---build_model
+-- ./NuSMV -int
+-- reset
+-- read_model -i elevador.smv
+-- flatten_hierarchy 
+-- encode_variables
+-- build_model
 
     

@@ -1,66 +1,93 @@
 MODULE main
 
 VAR
-    andares : {andar0, andar1, andar2, ERROR};
+    andar : {andar_0, andar_1, andar_2, ERROR};
     movimento : {subindo, descendo, parado, ERROR};
     tempo : 0 .. 6;
     porta : {abrindo, aberta, fechando, fechada, ERROR};
 
-
 ASSIGN
-    init(andares) := andar0;
+    -- Inicializa as variaveis
+    init(andar) := andar_0;
     init(movimento) := parado;
-    init(tempo) := 0;
     init(porta) := fechada;
+    init(tempo) := 0;
 
-
-    next(andares) := case
-        (tempo > 0) : andares;
-        (andares = andar0) & (movimento = subindo) : {andar1};
-        (andares = andar1) & (movimento = subindo) : {andar2};
-        (andares = andar1) & (movimento = descendo) : {andar0};
-        (andares = andar2) & (movimento = descendo) : {andar1};
-        (movimento = subindo | movimento = descendo | movimento = parado ) : andares;
-        TRUE: ERROR;
+    next(andar) := case
+        (tempo > 0) : andar; -- Mantem o estado do andar ate o tempo chegar a 0
+        (andar = andar_0) & (movimento = subindo) : {andar_1}; -- Transição de andar
+        (andar = andar_1) & (movimento = subindo) : {andar_2}; -- ...
+        (andar = andar_1) & (movimento = descendo) : {andar_0}; -- ...
+        (andar = andar_2) & (movimento = descendo) : {andar_1}; -- ... (fim)
+        (movimento = parado) : andar; -- Mantem o movimento parado (caso em que o elevador não fará nada)
+        TRUE: ERROR; -- Situação impossivel
     esac;
-
+ 
     next(movimento) := case
-        (tempo > 0) : movimento;
-        (porta != fechada | next(porta) != fechada) : parado;
-        (andares = andar0) & (movimento = parado ) : {parado ,subindo};
-        (andares = andar1) & (movimento = parado ) : {parado ,subindo,descendo};
-        (andares = andar2) & (movimento = parado ) : {parado ,descendo};
-        (tempo = 0) : parado ;
-        (movimento != parado ) : movimento;
-        TRUE: ERROR;
+        (tempo > 0) : movimento; -- Mantem o estado do movimento ate o tempo chegar a 0  
+        (porta != fechada | next(porta) != fechada) : parado; -- Verifica a porta para manter o movimento parado
+        (andar = andar_0) & (movimento = parado ) : {parado ,subindo}; -- Transições possiveis do movimento
+        (andar = andar_1) & (movimento = parado ) : {parado ,subindo,descendo}; -- ...
+        (andar = andar_2) & (movimento = parado ) : {parado ,descendo}; -- ... (fim)
+        (tempo = 0) : parado ; -- Garante que o movimento será parado ao fim da transição
+        TRUE: ERROR; -- Situação impossivel
     esac;
 
     next(tempo) := case
-        (tempo > 0) : tempo - 1;
-        (porta = fechada & next(porta) = abrindo) : 2;
-        (porta = abrindo & next(porta) = aberta) : 6;
-        (porta = aberta & next(porta) = fechando) : 2;
-        (movimento = parado & (next(movimento) = subindo | next(movimento) = descendo)) :  2;
-        TRUE : 0;
+        (tempo > 0) : tempo - 1; -- Reduz o tempo em 1 segundo (Contador dos tempos de transição)
+        (porta = fechada & next(porta) = abrindo) : 2; -- Contador de controle de porta (abrindo)
+        (porta = abrindo & next(porta) = aberta) : 6; -- Contador de controle de porta (aberta)
+        (porta = aberta & next(porta) = fechando) : 2; -- Contador de controle de porta (fechando)
+        (movimento = parado & (next(movimento) = subindo | next(movimento) = descendo)) :  2; -- Contador de controle do movimento (subindo ou descendo)
+        TRUE : 0; -- Mantem o tempo constante
     esac;
 
     next(porta) := case
-        (tempo > 0) : porta; 
-        (movimento != parado )  : fechada;
-        porta = fechada :{abrindo,fechada};
-        porta = abrindo : aberta;
-        porta = aberta : fechando;
-        porta = fechando : fechada;
-        TRUE: ERROR;
+        (tempo > 0) : porta; -- Mantem o estado da porta ate o tempo chegar a 0  
+        (movimento != parado)  : fechada; -- Garante que a porta estará fechada na transição de andares
+        porta = fechada :{abrindo,fechada}; -- Transições possiveis da porta
+        porta = abrindo : aberta; -- ...
+        porta = aberta : fechando; -- ...
+        porta = fechando : fechada; -- ... (fim)
+        TRUE: ERROR; -- Situação impossivel
     esac;
 
-SPEC AG(movimento != ERROR & porta != ERROR & andares != ERROR) -- verficação que nunca vai acontecer uma situação de erro
-SPEC AG(tempo >= 0 & tempo <= 6) -- verficação que o tempo irá exceder os limites
-SPEC AG((movimento = subindo | movimento = descendo) -> porta = fechada) -- verficação que o o elevador nunca estará subindo ou descendo com a porta aberta
-SPEC AG((porta = abrindo | porta = fechando | porta = aberta) -> movimento = parado) -- verficação do se e somente se para a situação anterior
-SPEC AG !(andares = andar2 & movimento = subindo) -- verficação que ele nunca vai estar subindo quando estiver no andar 2
-SPEC AG !(andares = andar0 & movimento = descendo) -- verficação que ele nunca vai estar descendo quando estiver no andar 0
-    
+-- TESTES ABSURDOS --
+SPEC AG(movimento != ERROR & porta != ERROR & andar != ERROR) -- verificação que nunca vai acontecer uma situação de erro
+SPEC AG !(andar = andar_2 & movimento = subindo) -- verificação que ele nunca vai estar subindo quando estiver no andar 2
+SPEC AG !(andar = andar_0 & movimento = descendo) -- verificação que ele nunca vai estar descendo quando estiver no andar 0
+
+-- TESTES DE MOVIMENTO --
+SPEC AG((porta = abrindo | porta = fechando | porta = aberta) -> movimento = parado) -- verificação do se e somente se para a situação anterior
+SPEC AG ((movimento = subindo | movimento = descendo) -> AF(movimento = parado)) -- verificação se o movimento é igual a subingo ou descendo e tempo igual a 0, o proximo estado será movimento igual a parado
+SPEC AG ((tempo = 0 & AX(tempo = 0)) -> AX(movimento = parado)) -- verificação se o tempo é igual a 0 e o próximo for tempo igual a 0, então no proximo estado será movimento igual a parado
+
+-- TESTES DE TEMPO --
+SPEC AG(tempo >= 0 & tempo <= 6) -- verificação que o tempo irá exceder os limites
+SPEC AG (tempo = 0 -> AX(tempo = 0 | tempo = 2 | tempo = 6)) -- verificação que ele do tempo igual 0 irá para tempo igual a 0 ou 2 ou 6
+SPEC AG (tempo = 1 -> AX(tempo = 0)) -- verificação se meu tempo é igual a n o proximo estado será tempo igual a n-1
+SPEC AG (tempo = 2 -> AX(tempo = 1)) -- ...
+SPEC AG (tempo = 3 -> AX(tempo = 2)) -- ...
+SPEC AG (tempo = 4 -> AX(tempo = 3)) -- ...
+SPEC AG (tempo = 5 -> AX(tempo = 4)) -- ...
+SPEC AG (tempo = 6 -> AX(tempo = 5)) -- ... (fim)
+
+-- TESTES DE andar --
+SPEC AG (movimento != parado & andar = andar_0 -> EF(andar != andar_0)) -- verificação se o movimento é diferente de parado e andar igual a n, existe (no futuro) em que o andar será diferente do andar n
+SPEC AG (movimento != parado & andar = andar_1 -> EF(andar != andar_1)) -- ...
+SPEC AG (movimento != parado & andar = andar_2 -> EF(andar != andar_2)) -- ... (fim)
+
+-- TESTES DE PORTA --
+SPEC AG((movimento = subindo | movimento = descendo) -> porta = fechada) -- verificação que o o elevador nunca estará subindo ou descendo com a porta aberta
+SPEC AG (porta != fechada -> EF(porta = fechada)) -- verificação se porta for diferente de fechada então existe um futuro em que voltará a ser fechada
+SPEC AG ((tempo = 0 & AX(tempo = 0)) -> AX(porta = fechada)) -- verificação se o tempo é igual a 0 e o próximo for tempo igual a 0, então no proximo estado será movimento igual a parado
+
+-- TESTES DE TRANSIÇÃO --
+SPEC AG (porta = abrindo & tempo = 0 -> AX(porta = aberta & tempo = 6)) -- verificação se a porta ta abrindo e o tempo igual a 0, o proximo estado será porta aberta e tempo igual a 6
+SPEC AG (porta = aberta & tempo = 0 -> AX(porta = fechando & tempo = 2)) -- verificação se a porta ta aberta e o tempo igual a 0, o proximo estado será porta fechando e tempo igual a 2
+SPEC AG (porta = fechando & tempo = 0 -> AX(porta = fechada & tempo = 0)) -- verificação se a porta ta fechando e o tempo igual a 0, o proximo estado será porta fechada e tempo igual a 0
+
+
 -- ./NuSMV -int
 -- reset
 -- read_model -i elevador.smv
